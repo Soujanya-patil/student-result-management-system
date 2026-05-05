@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+    <div class="bg-white rounded-xl shadow-sm p-6 card-hover transition-all">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-gray-500 text-sm">Total Students</p>
+                <p class="text-3xl font-bold text-gray-800">{{ total_students }}</p>
+            </div>
+            <div class="p-3 bg-blue-100 rounded-full">
+                <i data-lucide="users" class="w-6 h-6 text-blue-600"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-xl shadow-sm p-6 card-hover">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-gray-500 text-sm">Average Score</p>
+                <p class="text-3xl font-bold text-gray-800">{{ avg_percentage }}%</p>
+            </div>
+            <div class="p-3 bg-green-100 rounded-full">
+                <i data-lucide="award" class="w-6 h-6 text-green-600"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-xl shadow-sm p-6 card-hover">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-gray-500 text-sm">Passed</p>
+                <p class="text-3xl font-bold text-green-600">{{ passed }}</p>
+            </div>
+            <div class="p-3 bg-green-100 rounded-full">
+                <i data-lucide="thumbs-up" class="w-6 h-6 text-green-600"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-xl shadow-sm p-6 card-hover">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-gray-500 text-sm">Failed</p>
+                <p class="text-3xl font-bold text-red-600">{{ failed }}</p>
+            </div>
+            <div class="p-3 bg-red-100 rounded-full">
+                <i data-lucide="thumbs-down" class="w-6 h-6 text-red-600"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts and Recent -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Grade Distribution Chart -->
+    <div class="bg-white rounded-xl shadow-sm p-6">
+        <h3 class="text-lg font-semibold mb-4">Grade Distribution</h3>
+        <canvas id="gradeChart" height="250"></canvas>
+    </div>
+    
+    <!-- Recent Students -->
+    <div class="bg-white rounded-xl shadow-sm p-6">
+        <h3 class="text-lg font-semibold mb-4">Recent Students</h3>
+        <div class="space-y-3">
+            {% for student in recent_students %}
+            <div class="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg transition-all">
+                <div>
+                    <p class="font-medium text-gray-800">{{ student.name }}</p>
+                    <p class="text-sm text-gray-500">Roll: {{ student.roll_number }} | Class: {{ student.class_name }}</p>
+                </div>
+                <a href="{{ url_for('report_card', student_id=student.id) }}" class="text-indigo-600 hover:text-indigo-700 text-sm font-medium">View Report →</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Performance by Class -->
+<div class="mt-6 bg-white rounded-xl shadow-sm p-6">
+    <h3 class="text-lg font-semibold mb-4">Performance by Class</h3>
+    <canvas id="classChart" height="100"></canvas>
+</div>
+
+<script>
+    // Grade Distribution
+    const gradeCtx = document.getElementById('gradeChart').getContext('2d');
+    new Chart(gradeCtx, {
+        type: 'bar',
+        data: {
+            labels: ['A+', 'A', 'B+', 'B', 'C', 'D', 'F'],
+            datasets: [{
+                label: 'Number of Students',
+                data: [{{ grade_counts['A+'] }}, {{ grade_counts['A'] }}, {{ grade_counts['B+'] }}, 
+                       {{ grade_counts['B'] }}, {{ grade_counts['C'] }}, {{ grade_counts['D'] }}, 
+                       {{ grade_counts['F'] }}],
+                backgroundColor: '#6366f1',
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+    
+    // Class Performance
+    fetch('/api/statistics')
+        .then(res => res.json())
+        .then(data => {
+            const classCtx = document.getElementById('classChart').getContext('2d');
+            new Chart(classCtx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.class),
+                    datasets: [{
+                        label: 'Average Percentage',
+                        data: data.map(d => d.average),
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: { display: true, text: 'Percentage (%)' }
+                        }
+                    }
+                }
+            });
+        });
+</script>
+{% endblock %}

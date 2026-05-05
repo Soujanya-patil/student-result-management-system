@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Report Card - {{ student.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 text-white px-8 py-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold">REPORT CARD</h1>
+                    <p class="text-indigo-200 mt-1">Academic Year 2024-2025</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-2xl font-bold">📚 ResultSys</p>
+                    <p class="text-indigo-200 text-sm">Student Management System</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Student Info -->
+        <div class="px-8 py-6 border-b">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <p class="text-sm text-gray-500">Student Name</p>
+                    <p class="text-xl font-semibold text-gray-800">{{ student.name }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Roll Number</p>
+                    <p class="text-xl font-semibold text-gray-800">{{ student.roll_number }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Class</p>
+                    <p class="text-xl font-semibold text-gray-800">{{ student.class_name }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Parent Contact</p>
+                    <p class="text-xl font-semibold text-gray-800">{{ student.parent_contact or 'N/A' }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Marks Table -->
+        <div class="px-8 py-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">Subject-wise Marks</h3>
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Subject</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Subject Code</th>
+                        <th class="px-4 py-3 text-center text-sm font-semibold text-gray-600">Marks Obtained</th>
+                        <th class="px-4 py-3 text-center text-sm font-semibold text-gray-600">Max Marks</th>
+                        <th class="px-4 py-3 text-center text-sm font-semibold text-gray-600">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for subject in subjects %}
+                    <tr>
+                        <td class="px-4 py-3 text-sm text-gray-800">{{ subject.name }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">{{ subject.code }}</td>
+                        <td class="px-4 py-3 text-center text-sm font-semibold">
+                            {% if subject.marks %}
+                                {{ subject.marks }}
+                            {% else %}
+                                <span class="text-red-500">Not entered</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center text-sm text-gray-600">{{ subject.max_marks }}</td>
+                        <td class="px-4 py-3 text-center text-sm">
+                            {% if subject.marks %}
+                                {% if subject.marks >= 40 %}
+                                    <span class="text-green-600 font-semibold">✓ Pass</span>
+                                {% else %}
+                                    <span class="text-red-600 font-semibold">✗ Fail</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-gray-400">Pending</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Summary -->
+        <div class="bg-gray-50 px-8 py-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="text-center">
+                    <p class="text-sm text-gray-500">Total Marks</p>
+                    <p class="text-2xl font-bold text-gray-800">
+                        {{ student.get_total_marks() }} / 500
+                    </p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-500">Percentage</p>
+                    <p class="text-2xl font-bold" style="color: {{ grade_color }}">
+                        {{ "%.2f"|format(percentage) }}%
+                    </p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-500">Grade</p>
+                    <p class="text-2xl font-bold" style="color: {{ grade_color }}">{{ grade }}</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-500">Result</p>
+                    <p class="text-lg font-semibold" style="color: {{ grade_color }}">{{ remark }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="px-8 py-4 border-t text-center text-sm text-gray-500">
+            <p>This is a system-generated report card.</p>
+        </div>
+    </div>
+    
+    <div class="mt-6 flex justify-center space-x-4">
+        <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg transition-all">
+            🖨️ Print Report Card
+        </button>
+        <a href="{{ url_for('students_list') }}" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition-all">
+            ← Back to Students
+        </a>
+    </div>
+</div>
+{% endblock %}

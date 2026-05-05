@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Enter Marks{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-xl shadow-sm p-6">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800">{{ student.name }}</h2>
+            <p class="text-gray-600">Roll No: {{ student.roll_number }} | Class: {{ student.class_name }}</p>
+        </div>
+        <a href="{{ url_for('students_list') }}" class="text-indigo-600 hover:text-indigo-800">← Back to Students</a>
+    </div>
+    
+    <form id="resultsForm">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 border-b">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subject</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Marks Obtained</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Max Marks</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for subject in subjects %}
+                    <tr>
+                        <td class="px-6 py-4 text-sm font-medium text-gray-900">{{ subject.name }}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600">{{ subject.code }}</td>
+                        <td class="px-6 py-4">
+                            <input type="number" 
+                                   id="marks_{{ subject.id }}" 
+                                   value="{{ results[subject.id].marks_obtained if subject.id in results else '' }}"
+                                   class="w-24 px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                   min="0" max="{{ subject.max_marks }}"
+                                   step="0.5">
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-600">{{ subject.max_marks }}</td>
+                        <td class="px-6 py-4">
+                            <span id="status_{{ subject.id }}" class="text-sm"></span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="mt-6 flex space-x-3">
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg transition-all">
+                Save All Marks
+            </button>
+            <button type="button" onclick="calculateTotal()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition-all">
+                Calculate Total
+            </button>
+        </div>
+    </form>
+    
+    <div id="resultSummary" class="mt-6 p-4 bg-gray-50 rounded-lg hidden">
+        <!-- Summary will appear here -->
+    </div>
+</div>
+
+<script>
+    // Auto-calculate status when marks change
+    document.querySelectorAll('input[type="number"]').forEach(input => {
+        input.addEventListener('change', function() {
+            const marks = parseFloat(this.value);
+            const statusSpan = this.closest('tr').querySelector('td:last-child span');
+            
+            if (isNaN(marks)) {
+                statusSpan.innerHTML = '';
+                statusSpan.className = '';
+            } else if (marks >= 40) {
+                statusSpan.innerHTML = '✅ Pass';
+                statusSpan.className = 'text-green-600 font-medium';
+            } else {
+                statusSpan.innerHTML = '❌ Fail';
+                statusSpan.className = 'text-red-600 font-medium';
+            }
+        });
+        
+        // Trigger initial calculation
+        input.dispatchEvent(new Event('change'));
+    });
+    
+    // Save results
+    document.getElementById('resultsForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const results = [];
+        {% for subject in subjects %}
+        const marks{{ subject.id }} = document.getElementById('marks_{{ subject.id }}').value;
+        if (marks{{ subject.id }} !== '') {
+            results.push({
+                subject_id: {{ subject.id }},
+                marks: parseFloat(marks{{ subject.id }})
+            });
+        }
+        {% endfor %}
+        
+        const response = await fetch('/results/save', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                student_id: {{ student.id }},
+                results: results
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Results saved successfully!');
+            window.location.href = '/students';
+        } else {
+            alert('Error: ' + data.message);
+        }
+    });
+    
+    // Calculate total percentage
+    function calculateTotal() {
+        let totalObtained = 0;
+        let totalPossible = 0;
+        
+        {% for subject in subjects %}
+        const marks{{ subject.id }} = document.getElementById('marks_{{ subject.id }}').value;
+        if (marks{{ subject.id }} !== '') {
+            totalObtained += parseFloat(marks{{ subject.id }});
+            totalPossible += {{ subject.max_marks }};
+        }
+        {% endfor %}
+        
+        const percentage = (totalObtained / totalPossible) * 100;
+        const summary = document.getElementById('resultSummary');
+        
+        let grade = '';
+        let gradeColor = '';
+        if (percentage >= 90) { grade = 'A+'; gradeColor = 'text-green-600'; }
+        else if (percentage >= 80) { grade = 'A'; gradeColor = 'text-blue-600'; }
+        else if (percentage >= 70) { grade = 'B+'; gradeColor = 'text-purple-600'; }
+        else if (percentage >= 60) { grade = 'B'; gradeColor = 'text-yellow-600'; }
+        else if (percentage >= 50) { grade = 'C'; gradeColor = 'text-orange-600'; }
+        else if (percentage >= 40) { grade = 'D'; gradeColor = 'text-red-600'; }
+        else { grade = 'F'; gradeColor = 'text-red-700'; }
+        
+        summary.innerHTML = `
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="text-sm text-gray-600">Total Marks Obtained</p>
+                    <p class="text-2xl font-bold text-gray-800">${totalObtained} / ${totalPossible}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Percentage</p>
+                    <p class="text-2xl font-bold text-gray-800">${percentage.toFixed(2)}%</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Grade</p>
+                    <p class="text-2xl font-bold ${gradeColor}">${grade}</p>
+                </div>
+            </div>
+        `;
+        summary.classList.remove('hidden');
+    }
+</script>
+{% endblock %}
