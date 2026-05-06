@@ -1,57 +1,89 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
-from models import db, Student, Subject, Result
-from sqlalchemy import func, desc
-import json
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
+from models import db, Student, Subject, Result, User
+from datetime import datetime
+from functools import wraps
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-here'
+app.config['SECRET_KEY'] = 'your-secret-key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///results.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
-# Create tables and add sample data
+# Login required decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please login first', 'error')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
+# Create tables
 with app.app_context():
     db.create_all()
-    
-    # Add sample subjects if none exist
-    if Subject.query.count() == 0:
-        subjects = [
-            Subject(name='Mathematics', code='MATH101', max_marks=100),
-            Subject(name='Physics', code='PHY101', max_marks=100),
-            Subject(name='Chemistry', code='CHEM101', max_marks=100),
-            Subject(name='English', code='ENG101', max_marks=100),
-            Subject(name='Computer Science', code='CS101', max_marks=100),
-        ]
-        db.session.add_all(subjects)
-        db.session.commit()
-    
-    # Add sample students if none exist
-    if Student.query.count() == 0:
-        sample_students = [
-            Student(roll_number='2024001', name='Aarav Sharma', class_name='10A', parent_contact='9876543210', email='aarav@example.com', admission_year=2024),
-            Student(roll_number='2024002', name='Vivaan Gupta', class_name='10A', parent_contact='9876543211', email='vivaan@example.com', admission_year=2024),
-            Student(roll_number='2024003', name='Ananya Singh', class_name='10B', parent_contact='9876543212', email='ananya@example.com', admission_year=2024),
-            Student(roll_number='2024004', name='Diya Verma', class_name='10B', parent_contact='9876543213', email='diya@example.com', admission_year=2024),
-            Student(roll_number='2024005', name='Advik Reddy', class_name='10A', parent_contact='9876543214', email='advik@example.com', admission_year=2024),
-        ]
-        db.session.add_all(sample_students)
+
+# ========== AUTHENTICATION ROUTES ==========
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
+        confirm_password = request.form['confirm_password']
+        
+        if password != confirm_password:
+            flash('Passwords do not match', 'error')
+            return redirect(url_for('signup'))
+        
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists', 'error')
+            return redirect(url_for('signup'))
+        
+        if User.query.filter_by(email=email).first():
+            flash('Email already registered', 'error')
+            return redirect(url_for('signup'))
+        
+        new_user = User(username=username, email=email)
+        new_user.set_password(password)
+        db.session.add(new_user)
         db.session.commit()
         
-        # Add sample results
-        subjects = Subject.query.all()
-        students = Student.query.all()
-        for student in students:
-            for subject in subjects:
-                import random
-                marks = random.randint(45, 98)
-                result = Result(student_id=student.id, subject_id=subject.id, marks_obtained=marks, total_marks=100)
-                db.session.add(result)
-        db.session.commit()
+        flash('Account created! Please login.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('signup.html')
 
-# Routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        user = User.query.filter_by(username=username).first()
+        
+        if user and user.check_password(password):
+            session['user_id'] = user.id
+            session['username'] = user.username
+            flash(f'Welcome {username}!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid username or password', 'error')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('Logged out successfully', 'info')
+    return redirect(url_for('login'))
+
+# ========== DASHBOARD ROUTE (ONLY ONE!) ==========
+
 @app.route('/')
+@login_required
 def dashboard():
     total_students = Student.query.count()
     total_subjects = Subject.query.count()
@@ -67,9 +99,11 @@ def dashboard():
     grade_counts = {'A+': 0, 'A': 0, 'B+': 0, 'B': 0, 'C': 0, 'D': 0, 'F': 0}
     for student in students:
         grade = student.get_grade()[0]
-        grade_counts[grade] = grade_counts.get(grade, 0) + 1
+        if grade in grade_counts:
+            grade_counts[grade] += 1
+        else:
+            grade_counts['F'] += 1
     
-    # Recent students
     recent_students = Student.query.order_by(Student.created_at.desc()).limit(5).all()
     
     return render_template('dashboard.html',
@@ -81,27 +115,17 @@ def dashboard():
                          grade_counts=grade_counts,
                          recent_students=recent_students)
 
+# ========== STUDENT ROUTES ==========
+
 @app.route('/students')
+@login_required
 def students_list():
-    class_filter = request.args.get('class', '')
-    search = request.args.get('search', '')
-    
-    query = Student.query
-    if class_filter:
-        query = query.filter_by(class_name=class_filter)
-    if search:
-        query = query.filter(
-            Student.name.contains(search) | 
-            Student.roll_number.contains(search) |
-            Student.email.contains(search)
-        )
-    
-    students = query.order_by(Student.roll_number).all()
+    students = Student.query.all()
     classes = db.session.query(Student.class_name).distinct().all()
-    
     return render_template('students.html', students=students, classes=[c[0] for c in classes if c[0]])
 
 @app.route('/student/add', methods=['GET', 'POST'])
+@login_required
 def add_student():
     if request.method == 'POST':
         try:
@@ -119,11 +143,11 @@ def add_student():
             return redirect(url_for('students_list'))
         except Exception as e:
             flash(f'Error: {str(e)}', 'error')
-            return redirect(url_for('add_student'))
     
     return render_template('student_form.html', title='Add Student', student=None)
 
 @app.route('/student/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
 def edit_student(id):
     student = Student.query.get_or_404(id)
     if request.method == 'POST':
@@ -143,6 +167,7 @@ def edit_student(id):
     return render_template('student_form.html', title='Edit Student', student=student)
 
 @app.route('/student/delete/<int:id>')
+@login_required
 def delete_student(id):
     student = Student.query.get_or_404(id)
     try:
@@ -153,7 +178,10 @@ def delete_student(id):
         flash(f'Error: {str(e)}', 'error')
     return redirect(url_for('students_list'))
 
+# ========== RESULT ROUTES ==========
+
 @app.route('/results/<int:student_id>')
+@login_required
 def view_results(student_id):
     student = Student.query.get_or_404(student_id)
     subjects = Subject.query.all()
@@ -165,6 +193,7 @@ def view_results(student_id):
     return render_template('results.html', student=student, subjects=subjects, results=results)
 
 @app.route('/results/save', methods=['POST'])
+@login_required
 def save_results():
     data = request.json
     student_id = data['student_id']
@@ -195,6 +224,7 @@ def save_results():
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/report/<int:student_id>')
+@login_required
 def report_card(student_id):
     student = Student.query.get_or_404(student_id)
     subjects = Subject.query.all()
@@ -222,6 +252,7 @@ def report_card(student_id):
                          remark=remark)
 
 @app.route('/api/statistics')
+@login_required
 def statistics_api():
     students = Student.query.all()
     class_stats = {}

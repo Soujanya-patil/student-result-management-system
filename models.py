@@ -1,8 +1,29 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
+# ========== USER MODEL ==========
+class User(db.Model):
+    __tablename__ = 'users'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+# ========== STUDENT MODEL ==========
 class Student(db.Model):
     __tablename__ = 'students'
     
@@ -44,16 +65,10 @@ class Student(db.Model):
         else:
             return ('F', '#dc2626', 'Fail')
     
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'roll_number': self.roll_number,
-            'name': self.name,
-            'class_name': self.class_name,
-            'percentage': self.get_percentage(),
-            'grade': self.get_grade()[0]
-        }
+    def __repr__(self):
+        return f'<Student {self.name}>'
 
+# ========== SUBJECT MODEL ==========
 class Subject(db.Model):
     __tablename__ = 'subjects'
     
@@ -63,7 +78,11 @@ class Subject(db.Model):
     max_marks = db.Column(db.Integer, default=100)
     
     results = db.relationship('Result', backref='subject', lazy=True)
+    
+    def __repr__(self):
+        return f'<Subject {self.name}>'
 
+# ========== RESULT MODEL ==========
 class Result(db.Model):
     __tablename__ = 'results'
     
@@ -78,3 +97,6 @@ class Result(db.Model):
     __table_args__ = (
         db.UniqueConstraint('student_id', 'subject_id', name='unique_student_subject'),
     )
+    
+    def __repr__(self):
+        return f'<Result {self.student_id}:{self.subject_id}>'
