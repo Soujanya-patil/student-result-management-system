@@ -47,8 +47,9 @@
                 <td class="px-6 py-4 text-sm text-gray-600">{{ student.class_name }}</td>
                 <td class="px-6 py-4 text-sm font-semibold">{{ student.get_percentage() }}%</td>
                 <td class="px-6 py-4">
-                    <span class="px-2 py-1 text-xs font-semibold rounded-full" style="background: {{ student.get_grade()[1] }}20; color: {{ student.get_grade()[1] }}">
-                        {{ student.get_grade()[0] }}
+                    {% set grade_info = student.get_grade() %}
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full" style="background: {{ grade_info[1] }}20; color: {{ grade_info[1] }}">
+                        {{ grade_info[0] }}
                     </span>
                 </td>
                 <td class="px-6 py-4 text-sm space-x-2">
@@ -56,6 +57,12 @@
                     <a href="{{ url_for('report_card', student_id=student.id) }}" class="text-green-600 hover:text-green-800">Report</a>
                     <a href="{{ url_for('edit_student', id=student.id) }}" class="text-indigo-600 hover:text-indigo-800">Edit</a>
                     <a href="{{ url_for('delete_student', id=student.id) }}" class="text-red-600 hover:text-red-800" onclick="return confirm('Delete this student?')">Delete</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+                    No students found. Click "Add Student" to get started.
                 </td>
             </tr>
             {% endfor %}
@@ -68,14 +75,25 @@
         const classFilter = document.getElementById('classFilter').value;
         const search = document.getElementById('searchInput').value;
         let url = '/students?';
-        if (classFilter) url += `class=${classFilter}&`;
-        if (search) url += `search=${search}&`;
+        if (classFilter) url += 'class=' + encodeURIComponent(classFilter) + '&';
+        if (search) url += 'search=' + encodeURIComponent(search) + '&';
         window.location.href = url;
     }
     
     // Enter key search
-    document.getElementById('searchInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') applyFilters();
-    });
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') applyFilters();
+        });
+    }
+    
+    // Preselect class filter from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const classParam = urlParams.get('class');
+    if (classParam) {
+        const classSelect = document.getElementById('classFilter');
+        if (classSelect) classSelect.value = classParam;
+    }
 </script>
 {% endblock %}

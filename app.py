@@ -3,9 +3,11 @@ from models import db, Student, Subject, Result, User
 from datetime import datetime
 from functools import wraps
 
+import os
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///results.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(app.instance_path, "results.db")}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
@@ -23,6 +25,12 @@ def login_required(f):
 # Create tables
 with app.app_context():
     db.create_all()
+
+# ========== WELCOME PAGE (NO LOGIN REQUIRED) ==========
+
+@app.route('/')
+def home():
+    return render_template('welcome.html')
 
 # ========== AUTHENTICATION ROUTES ==========
 
@@ -80,9 +88,9 @@ def logout():
     flash('Logged out successfully', 'info')
     return redirect(url_for('login'))
 
-# ========== DASHBOARD ROUTE (ONLY ONE!) ==========
+# ========== DASHBOARD ROUTE (REQUIRES LOGIN) ==========
 
-@app.route('/')
+@app.route('/dashboard')
 @login_required
 def dashboard():
     total_students = Student.query.count()
@@ -120,9 +128,32 @@ def dashboard():
 @app.route('/students')
 @login_required
 def students_list():
-    students = Student.query.all()
-    classes = db.session.query(Student.class_name).distinct().all()
-    return render_template('students.html', students=students, classes=[c[0] for c in classes if c[0]])
+    # Get filter parameters from URL
+    class_filter = request.args.get('class', '')
+    search = request.args.get('search', '')
+    
+    # Start with all students query
+    query = Student.query
+    
+    # Apply class filter if provided
+    if class_filter:
+        query = query.filter(Student.class_name == class_filter)
+    
+    # Apply search filter if provided  
+    if search:
+        query = query.filter(
+            Student.name.contains(search) | 
+            Student.roll_number.contains(search)
+        )
+    
+    # Execute query
+    students = query.order_by(Student.roll_number).all()
+    
+    # Get all unique classes for dropdown
+    all_classes = db.session.query(Student.class_name).distinct().all()
+    class_list = [c[0] for c in all_classes if c[0]]
+    
+    return render_template('students.html', students=students, classes=class_list)
 
 @app.route('/student/add', methods=['GET', 'POST'])
 @login_required
@@ -200,21 +231,28 @@ def save_results():
     
     try:
         for subject_result in data['results']:
+            subject = Subject.query.get(subject_result['subject_id'])
+            if not subject:
+                return jsonify({'success': False, 'message': f'Subject with id {subject_result["subject_id"]} not found'})
+            
             result = Result.query.filter_by(
                 student_id=student_id,
                 subject_id=subject_result['subject_id']
             ).first()
             
             marks = float(subject_result['marks'])
+            if marks < 0 or marks > subject.max_marks:
+                return jsonify({'success': False, 'message': f'Marks for {subject.name} must be between 0 and {subject.max_marks}'})
             
             if result:
                 result.marks_obtained = marks
+                result.total_marks = subject.max_marks
             else:
                 result = Result(
                     student_id=student_id,
                     subject_id=subject_result['subject_id'],
                     marks_obtained=marks,
-                    total_marks=100
+                    total_marks=subject.max_marks
                 )
                 db.session.add(result)
         
